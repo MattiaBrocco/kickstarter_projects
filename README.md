@@ -1,5 +1,6 @@
 # kickstarter_projects
-Comparison of ML algorithms for a binary classification task
+Comparison of ML algorithms for a binary classification task on Rstudio.
+KAGGLE LINK: https://www.kaggle.com/kemical/kickstarter-projects
 
 
 Kickstarter is a great crowdfunding platform
