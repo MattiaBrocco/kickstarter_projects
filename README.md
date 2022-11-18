@@ -1,6 +1,9 @@
-# kickstarter_projects
+# Kickstarter campaigns (October 2009 - January 2018)
+
+*TOPICS*: R, Classification, Machine Learning
+
+
 Comparison of ML algorithms for a binary classification task on Rstudio.
-KAGGLE LINK: https://www.kaggle.com/kemical/kickstarter-projects
 
 
 Kickstarter is a great crowdfunding platform used worldwide. To date it has been used to raise more than 5 billion dollars and with a total of nearly 200.000 successfully funded projects, with a success rate of 38% (SOURCE: Kickstarter).
@@ -11,3 +14,7 @@ I wanted to conduct this work with Rstudio, to deepen my knowledge on the syntax
 
 Interestly, here an estimation (via Bass Model) for the amounts of the campaigns grouped by month.
 ![image](https://user-images.githubusercontent.com/61026948/202702772-3d33e4f4-2f2e-461e-904a-ba9f2474560c.png)
+
+
+### SOURCES
+* https://www.kaggle.com/kemical/kickstarter-projects
