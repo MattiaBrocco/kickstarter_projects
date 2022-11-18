@@ -12,7 +12,7 @@ Through a dataset found on Kaggle I've tried to see if it was possible to predic
 
 I wanted to conduct this work with Rstudio, to deepen my knowledge on the syntax for ML algorithms, specifically for binary classification tasks.
 
-Interestly, here an estimation (via Bass Model) for the amounts of the campaigns grouped by month.
+Interestingly, here an estimation (via Bass Model) for the amounts of the campaigns grouped by month.
 ![image](https://user-images.githubusercontent.com/61026948/202702772-3d33e4f4-2f2e-461e-904a-ba9f2474560c.png)
 
 
