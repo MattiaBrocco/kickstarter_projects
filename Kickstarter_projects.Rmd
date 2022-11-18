@@ -1,5 +1,6 @@
 ---
 title: "Kickstarter_projects"
+author: "Mattia Brocco"
 output:
   html_document:
     df_print: paged
@@ -7,7 +8,9 @@ output:
 
 ```{r, include = FALSE}
 library(caret)
+library(dplyr)
 library(psych)
+library(glmnet)
 library(mosaic)
 library(ggplot2)
 library(reshape2)
@@ -20,7 +23,7 @@ library(tigerstats)
 
 
 ```{r}
-df <- read.csv("ks-projects-201801.csv", sep = ",")
+df <- read.csv(".\\data\\ks-projects-201801.csv", sep = ",")
 head(df)
 ```
 
@@ -48,7 +51,6 @@ ggplot(df, aes(state)) + geom_bar(fill = "#E76F51") + theme_classic()
 ```
 
 
-
 ```{r}
 densityplot(df$usd_goal_real)
 densityplot(df$usd_pledged_real)
@@ -61,16 +63,9 @@ ddd <- subset(df, currency == "USD" | currency == "EUR" | currency == "GBP" | cu
 ggplot(ddd, aes(country)) + geom_bar(fill = "#0073C2FF") + theme_classic()
 ```
 
-
-
 ## Data Cleaning
 
 ```{r}
-# Drop columns: category (I will rely on "main_category"),
-# ID, pledged and goal (since there is the currency and the conversion in USD), name
-df <- subset(df, select = -c(category, ID, pledged, goal, name) )
-
-
 # Drop all rows that contain NA values
 df <- na.omit(df)
 ```
@@ -80,7 +75,8 @@ df <- na.omit(df)
 ```{r}
 # Reduce the levels of the feature "currency" to the most-frequent 4.
 # Then, convert the character type to the value w.r.t. USD at August 30, 2020.
-df <- subset(df, currency == "USD" | currency == "EUR" | currency == "GBP" | currency == "CAD")
+df <- subset(df, currency == "USD" | currency == "EUR" |
+               currency == "GBP" | currency == "CAD")
 curr.fun <- function(el){
   if (el == "USD"){target.el <- 1}
   else if (el == "GBP"){target.el <- 0.75}
@@ -98,13 +94,13 @@ df <- subset(df, country != "N,0\"")
 
 country.coords <- read.table("coords.txt", sep = ",", header = T)
 
-country.lat <- function(el){ return(country.coords[country.coords$Abbreviation == el, ][[2]]) }
-country.lon <- function(el){ return(country.coords[country.coords$Abbreviation == el, ][[3]]) }
+country.lat <- function(el){
+  return(country.coords[country.coords$Abbreviation == el, ][[2]]) }
+country.lon <- function(el){
+  return(country.coords[country.coords$Abbreviation == el, ][[3]]) }
 
 df$latitude <- as.numeric(lapply(df$country, country.lat))
 df$longitude <- as.numeric(lapply(df$country, country.lon))
-
-df <- subset(df, select = -c(country) )
 ```
 
 
@@ -113,7 +109,6 @@ df <- subset(df, select = -c(country) )
 # Convert the following columns to obtain dates
 df$deadline <- ymd(df$deadline)
 df$launched <- ymd_hms(df$launched)
-
 
 
 # Add columns as year, month, day of venture's launch and deadline.
@@ -125,12 +120,9 @@ df$year.deadl <- year(df$deadline)
 df$month.deadl <- month(df$deadline)
 df$day.deadl <- mday(df$deadline)
 
-
-
 # Create the column "duration" as difference between "deadline" and "launched".
-# Finally, drop those two columns
-df$duration <- as.numeric( difftime(df$deadline, df$launched, units = c("days")) )
-df <- subset(df, select = -c(deadline, launched) )
+df$duration <- as.numeric( difftime(df$deadline, df$launched,
+                                    units = c("days")) )
 ```
 
 
@@ -164,22 +156,18 @@ cat.fun <- function(el){
   else if(el == "Crafts"){new.el <- 6 }
   return(new.el)}
 
-df$main_category <- as.factor(as.character(lapply(df$main_category, cat.fun)))
+#df$main_category <- as.factor(as.character(lapply(df$main_category,
+#                                                  cat.fun)))
 ```
 
 
 
 ```{r}
 # The target column (state) will be defined as:
-# 0: canceled, failed, suspended, undefined
-# 1: live, successful
-target.fun <- function(el){
-  if (el == "live"){target.el <- 1}
-  else if (el == "successful"){target.el <- 1}
-  else {target.el <- 0}
-  return(target.el)}
-df$result <- as.factor(as.character(lapply(df$state, target.fun)))
-df <- subset(df, select = -c(state) )
+# 0: failed
+# 1: successful
+
+df <- df[(df$state == "failed") | (df$state == "successful"),]
 ```
 
 
@@ -198,6 +186,41 @@ dim(df)
 
 
 
+```{r}
+#### TIME-SERIES ANALYSIS
+library(DIMORA)
+
+df.sorted.date <- df
+
+df.sorted.date$year.month.launch <- paste(as.character(df.sorted.date$year.launch), " ",
+                                          as.character(df.sorted.date$month.launch))
+
+pivot.usd <- df.sorted.date %>% group_by(year.month.launch) %>%
+  summarize(sum_values = sum(usd_goal_real))
+
+pivot.usd <- pivot.usd[order(pivot.usd$year.month.launch),]
+
+plot(pivot.usd$sum_values, type = "l")
+bm <- BM(pivot.usd$sum_values, display = T)
+summary(bm)
+```
+
+```{r}
+symnum(cor(df[,-c(1, 2, 3, 4, 6, 8, 10, 12, 25)]))
+```
+
+```{r}
+# Drop columns: category (I will rely on "main_category"),
+# ID, pledged and goal (since there is the currency and the conversion in USD), name
+df <- subset(df, select = -c(ID, name, main_category, currency,
+                             deadline, launched, goal, pledged,
+                             # DUE TO COLLINEARITY
+                             usd.pledged,  year.deadl,
+                             month.deadl, day.deadl ) )
+```
+
+
+
 ## Data Preparation
 
 * Scaling (min-max scaler)
@@ -209,14 +232,15 @@ dim(df)
 # and longitude still have reciprocal significance and, for all the other
 # features, the scaling looks reliable after many outliers have been removed.
 
-minmax.scal <- function(el){ return( (((el - min(el))) / (max(el) - min(el))) ) }
+#minmax.scal <- function(el){ return( (((el - min(el))) / (max(el) - min(el))) ) }
 
-for (i in colnames(df)[3:15]) { df[[i]] <- minmax.scal(df[[i]]) }
+#for (i in colnames(df)[3:15]) { df[[i]] <- minmax.scal(df[[i]]) }
 ```
 
 
 
 ```{r}
+set.seed(42)
 sample.df <- sample(df, 20000)
 sample.df <- subset(sample.df, select = -c(orig.id))
 ```
@@ -238,22 +262,18 @@ dim(test.df)
 ```{r}
 # Are the class balanced?
 # For sure these two classes are not balanced, nonetheless the gap may be not worthy to be lowered, hence
-# a chance of prediciton will be given in this "moderately unbalanced" condition.
+# a chance of prediction will be given in this "moderately unbalanced" condition.
 
-ggplot(train.df, aes(result)) + geom_bar(fill = "#8196D2") + theme_classic()
+ggplot(train.df, aes(state)) + geom_bar(fill = "#8196D2") + theme_classic()
 ```
-
-
 
 ```{r}
 # Assessment of the correlation between features
 
-to.corr <- round(cor(sample.df[,2:15]),3)
+to.corr <- round(cor(sample.df[,c(3, 5, 6, 7, 8, 9, 10, 11, 12)]), 3)
 melted_corr <- melt(to.corr)
 ggplot(data = melted_corr, aes(x = Var1, y = Var2, fill = value)) + geom_tile()
 ```
-
-
 
 ## Classification Models
 
@@ -267,20 +287,18 @@ VALUES WRITTEN WITHIN EX-POST CONSIDERATIONS MAY DIFFER FROM ACTUAL SINCE NO RAN
 
 #### Logistic Regression
 
+
+
 ```{r}
-log.reg <- glm(result ~., data = train.df, family = binomial(link = "logit"))
+y.train <- train.df$state
+y.train <- ifelse(y.train == "failed" , 0 , 1)
+
+log.reg <- glm(y.train~., train.df[, -2], family = "binomial")
 summary(log.reg)
-```
-
-
-
-```{r}
-exp(log.reg$coefficients)
 ```
 
 Through these lines of code it is possible to understand that the most relevant features for the logistic regression model are:
 
-* Main category 5 (Fashion)
 * Backers
 * usd_pledged_real
 * usd_goal_real
@@ -293,9 +311,11 @@ Through these lines of code it is possible to understand that the most relevant 
 library(caTools)
 
 logreg_tune <- data.frame(nIter = seq(1,20, by = 1))
-logreg_mod <- train(result ~., data = train.df, method = "LogitBoost", tuneGrid = logreg_tune,
-                trControl = trainControl(method = "cv", number = 3, allowParallel = TRUE))
-logreg_mod
+logreg_mod <- train(state ~., data = train.df, method = "LogitBoost",
+                    tuneGrid = logreg_tune,
+                    trControl = trainControl(method = "cv", number = 3,
+                                             allowParallel = TRUE))
+summary(logreg_mod)
 ```
 
 
@@ -305,12 +325,10 @@ ggplot(logreg_mod) +
   geom_line(color = "#8196D2") + geom_point(color = "#8196D2") + theme_classic() 
 ```
 
-
-
 ```{r}
 # Performance assessment
-logreg.pred <- predict(logreg_mod, test.df)
-confusionMatrix(data = logreg.pred, reference = test.df$result)
+logreg.pred <- predict(logreg_mod, test.df, type = "raw")
+confusionMatrix(data = logreg.pred, reference = as.factor(test.df$state))
 ```
 
 This models suits almost perfectly this binary classification task, as values of _sensitivity_ shows; nonetheless, there is a very slight underperformance of _specificity_ with respect of sensitivity. Also the Mcnemar's test p-value is above the threshold of 5%, meaning that the related null hypothesis should be accepted (i.e. the difference in discordant pairs is attributable to pure chance)
@@ -323,8 +341,9 @@ This is the first model I've never tried to deploy, and I decided to start from 
 
 ```{r}
 library(MASS)
-lda.mod <- train(result ~., data = train.df, method = "lda",
-                 trControl = trainControl(method = "cv", number = 3, allowParallel = TRUE))
+lda.mod <- train(state ~., data = train.df, method = "lda",
+                 trControl = trainControl(method = "cv", number = 3,
+                                          allowParallel = TRUE))
 lda.mod
 ```
 
@@ -333,11 +352,12 @@ lda.mod
 ```{r}
 # Performance assessment
 lda.pred <- predict(lda.mod, test.df)
-confusionMatrix(data = lda.pred, reference = test.df$result)
+confusionMatrix(data = lda.pred, reference = as.factor(test.df$state))
 ```
+
 Accuracy and Kappa shown by the `train` output are moderate values, that present a more-than-fair performance of this basic model (it is not tuned because the `caret` package does not provide any variable to tune this specific model).
 
-Nonetheless, we can see how this model is really good at predicting *failures* (0s), while it suffers a lot when it comes to *successes* (1s). This leads to a _balanced accuracy_ of $0.7046$. This result may be related to the slight imbalance that exist between the classes.
+Nonetheless, we can see how this model is really good at predicting *failures* (0s), while it suffers a lot when it comes to *successes* (1s). This leads to a _balanced accuracy_ of $0.77$. This result may be related to the slight imbalance that exist between the classes.
 
 
 
@@ -353,13 +373,11 @@ library(mda)
 library(earth)
 
 fda_tune <- data.frame(degree = seq(1,10, by = 1), nprune = seq(1,10, by = 1))
-fda_mod <- train(result ~., data = train.df, method = "fda", tuneGrid = fda_tune,
-                trControl = trainControl(method = "cv", number = 3,
-                                         allowParallel = TRUE))
+fda_mod <- train(state ~., data = train.df, method = "fda", tuneGrid = fda_tune,
+                 trControl = trainControl(method = "cv", number = 3,
+                                          allowParallel = TRUE))
 fda_mod
 ```
-
-
 
 ```{r}
 plot(fda_mod)
@@ -370,9 +388,10 @@ plot(fda_mod)
 ```{r}
 # Performance assessment
 fda_pred <- predict(fda_mod, test.df)
-confusionMatrix(data = fda_pred, reference = test.df$result)
+confusionMatrix(data = fda_pred, reference = as.factor(test.df$state))
 ```
-The tuning of a flexible discriminant analysis led to a drastic increase in model's performance. Accuracy has overcome 90% threshold, and the same stands for sensitivity and specificity. In this case, the _Mcnemar's test p-value_ is far above the 0.05 threshold, meaning that the related null hypothesis should be accepted (i.e. the difference in discordant pairs is attributable to pure chance).
+
+The tuning of a flexible discriminant analysis led to a drastic increase in model's performance. Accuracy has overcome $0.95$ threshold, and the same stands for sensitivity and specificity. In this case, the _Mcnemar's test p-value_ is far above the 0.05 threshold, meaning that the related null hypothesis should be accepted (i.e. the difference in discordant pairs is attributable to pure chance).
 
 
 
@@ -385,8 +404,10 @@ The tuning of a flexible discriminant analysis led to a drastic increase in mode
 ```{r}
 library(caret)
 library(naivebayes)
-nb_tune <- data.frame(usekernel = FALSE, laplace = seq(0,5, by = 1), adjust = seq(0,5, by = 1))
-nb_mod <- train(result ~., data = train.df, method = "naive_bayes", tuneGrid = nb_tune,
+nb_tune <- data.frame(usekernel = FALSE, laplace = seq(0,5, by = 1),
+                      adjust = seq(0,5, by = 1))
+nb_mod <- train(state ~., data = train.df, method = "naive_bayes",
+                tuneGrid = nb_tune,
                 trControl = trainControl(method = "repeatedcv", number = 3,
                                          repeats = 3, allowParallel = TRUE))
 nb_mod
@@ -403,8 +424,9 @@ plot(nb_mod)
 ```{r}
 # Performance assessment
 nb_pred <- predict(nb_mod, test.df)
-confusionMatrix(data = nb_pred, reference = test.df$result)
+confusionMatrix(data = nb_pred, reference = as.factor(test.df$state))
 ```
+
 The Naive Bayes shortcomings are emphasized by _specificity_, even if all the other metrics don't seem to reflect good performance of the model. So far, only the Linear Discriminant analysis has performed worse, but its sensitivity was still higher. In a real world case, for sure the choice of the model won't be a Naive Bayes. 
 
 
@@ -425,11 +447,14 @@ library(ordinalForest)
 # nsets default: 1000
 # ntreeperdiv default: 100
 # ntreefinal default: 5000
-rf.tune <- data.frame(nsets = c(100, 500, 1000, 1200), ntreeperdiv = c(50, 100, 150, 200),
+rf.tune <- data.frame(nsets = c(100, 500, 1000, 1200),
+                      ntreeperdiv = c(50, 100, 150, 200),
                       ntreefinal = c(100, 1000, 5000, 6000))
 
-rf.mod <- train(result ~., data = train.df, method = "ordinalRF", tuneGrid = rf.tune,
-                trControl = trainControl(method = "cv", number = 3, allowParallel = TRUE))
+rf.mod <- train(state ~., data = train.df, method = "ordinalRF",
+                tuneGrid = rf.tune,
+                trControl = trainControl(method = "cv", number = 3,
+                                         allowParallel = TRUE))
 rf.mod
 ```
 
@@ -438,8 +463,9 @@ rf.mod
 ```{r}
 # Performance assessment
 rf.pred <- predict(rf.mod, test.df)
-confusionMatrix(data = rf.pred, reference = test.df$result)
+confusionMatrix(data = rf.pred, reference = as.factor(test.df$state))
 ```
+
 The model tuning led to these parameters: `nsets` = 100, `ntreeperdiv` = 50 and `ntreefinal` = 100. So far, this looks as the best model in terms of _specificity_ (which has been quite a struggle throughout the process), while for what concerns _sensitivity_ the Boosted Logistic Regression model has shown, with a slight gap, the best performance so far. In addition, the _Mcnemar's test p-value_ is almost zero. 
 
 
@@ -450,21 +476,17 @@ The output is the ordered ranking of accuracy. The Boosted Logistic Regression a
 
 ```{r}
 df.params <- data.frame(model = c("LR", "LDA", "FDA", "NB", "RF"),
-                        accuracy = c(0.9899, 0.7868, 0.976, 0.807, 0.987),
-                        mcnemar.pvalue = c(0.1486, 2.2e-16, 0.4533, 3.956e-6, 2.797e-5),
-                        sensitivity = c(0.9909, 0.9491, 0.9833, 0.8359, 0.9855),
-                        specificity = c(0.9878, 0.4601, 0.9613, 0.7489, 0.99),
-                        prevalence = c(0.6729, 0.6682, 0.6682, 0.6682, 0.6682),
-                        balanced.acc = c(0.9894, 0.7046, 0.9723, 0.7924, 0.9877))
+                        accuracy = c(0.9925, 0.8002, 0.955, 0.5823, 0.987),
+                        sensitivity = c(0.9908, 0.9072, 0.9366, 0.3970, 0.9855),
+                        specificity = c(0.9951, 0.6363, 0.9831, 0.8662, 0.99),
+                        prevalence = c(0.6074, 0.6925, 0.5733, 0.6050, 0.6682),
+                        balanced.acc = c(0.9929, 0.7717, 0.9599, 0.6316, 0.9877))
 
 df.params <- df.params[order(-df.params$accuracy), ]
 df.params[,1:2]
 ```
 
-
-
 The following graph shows how the models behave according to balanced accuracy.Since it is the average between sensitivity and specificity, the difference between the best three models lies in how well they have been able to predict the negative class (specificity).
-
 
 ```{r}
 ggplot(df.params, aes(x = model, y = balanced.acc, group = 1)) +
@@ -473,9 +495,7 @@ ggplot(df.params, aes(x = model, y = balanced.acc, group = 1)) +
   ylim(min(df.params$balanced.acc), 1) + theme_classic()
 ```
 
-
 In this final graph it is possible to see the comparison of four performance's metrics: _sensitivity_ and _specificity_ are continuous lines, and we can see how sensitivity is always higher than specificity, and accordingly how these models are much better at predicting failures (0s, that is the *positive class*) than successes (1s). This is may be caused by the disproportion between classes, and consequently it affects the gap between _accuracy_ (dotted line) and _balanced accuracy_ (dashed line).
-
 
 ```{r}
 ggplot(df.params, aes(x = model, group = 1)) + 
