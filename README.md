@@ -17,4 +17,6 @@ Interestingly, here an estimation (via Bass Model) for the amounts of the campai
 
 
 ### SOURCES
-* https://www.kaggle.com/kemical/kickstarter-projects
+[1] Data: https://www.kaggle.com/kemical/kickstarter-projects
+[2] Mahajan, V., Muller, E., & Bass, F. M. (1990). *New Product Diffusion Models in Marketing: A Review and Directions for Research*. Journal of Marketing, 54(1), 1–26. https://doi.org/10.1177/002224299005400101
+[3] Max Kuhn. Contributions from Jed Wing, Steve Weston, Andre Williams, Chris Keefer, Allan Engelhardt, Tony Cooper, Zachary Mayer, Brenton Kenkel, the R Core Team, Michael Benesty, Reynald Lescarbeau, Andrew Ziem, Luca Scrucca, Yuan Tang and Can Candan. (2016). [*caret: Classification and Regression Training. R package version 6.0-71*](https://CRAN.R-project.org/package=caret)
