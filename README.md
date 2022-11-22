@@ -1,8 +1,5 @@
 # Kickstarter campaigns (October 2009 - January 2018)
 
-*TOPICS*: R, Classification, Machine Learning
-
-
 Comparison of ML algorithms for a binary classification task on Rstudio.
 
 
